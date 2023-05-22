@@ -11,18 +11,17 @@ public class Server {
 
     private Boolean isRunning;
 
-    public Server() {
+    public Server()
+    {
         clients = new ArrayList<>();
-        this.isRunning = false;
     }
 
     public void start(int port) {
         try {
             this.serverSocket = new ServerSocket(port);
-            this.isRunning = true;
             System.out.println("Server started on port " + port);
 
-            while (this.isRunning) {
+            while (true) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("New client connection: " + clientSocket);
 
