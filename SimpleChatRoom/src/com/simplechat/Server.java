@@ -9,16 +9,20 @@ public class Server {
     private ServerSocket serverSocket;
     private List<ClientHandler> clients;
 
+    private Boolean isRunning;
+
     public Server() {
         clients = new ArrayList<>();
+        this.isRunning = false;
     }
 
     public void start(int port) {
         try {
             this.serverSocket = new ServerSocket(port);
+            this.isRunning = true;
             System.out.println("Server started on port " + port);
 
-            while (true) {
+            while (this.isRunning) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("New client connection: " + clientSocket);
 
