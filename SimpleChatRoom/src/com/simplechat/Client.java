@@ -1,11 +1,21 @@
 package com.simplechat;
 
+import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+
 import java.io.*;
 import java.net.*;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
-public class Client {
+public class Client extends Application {
     private Socket socket;
     private BufferedReader input;
     private PrintWriter output;
@@ -15,9 +25,16 @@ public class Client {
 
     private boolean isConnected;
 
-    public Client(String serverAddress, int serverPort) {
+    private TextArea chatArea;
+    private TextField messageField;
+    private Button sendButton;
+    private TextField nicknameField;
+    private Button setNicknameButton;
+
+    @Override
+    public void start(Stage primaryStage) {
         try {
-            socket = new Socket(serverAddress, serverPort);
+            socket = new Socket("localhost", 12345);
             isConnected = true;
             System.out.println("Connected to server: " + socket);
 
@@ -31,80 +48,91 @@ public class Client {
         } catch (IOException ex) {
             ex.printStackTrace();
         }
-    }
 
-    public void start() {
-        try {
-            // Start a new thread to listen for messages from the server
-            receiveThread = new Thread(() -> {
-                try {
-                    String message;
-                    while ((message = input.readLine()) != null) {
-                        if (message.startsWith("/nickname")) {
-                            setNicknameFromServer(message.substring(10));
-                        } else {
-                            System.out.println(message);
-                        }
-                    }
-                } catch (IOException e) {
-                    // Handle the SocketException here when the server is stopped
-                    if (e instanceof SocketException) {
-                        System.out.println("Server has stopped. Disconnected from the server.");
+        chatArea = new TextArea();
+        chatArea.setEditable(false);
+
+        messageField = new TextField();
+        sendButton = new Button("Send");
+        sendButton.setOnAction(event -> sendMessage(messageField.getText().trim()));
+
+        nicknameField = new TextField();
+        setNicknameButton = new Button("Set Nickname");
+        setNicknameButton.setOnAction(event -> setNickname());
+
+        VBox vBox = new VBox(10, chatArea, messageField, sendButton, nicknameField, setNicknameButton);
+        vBox.setPadding(new Insets(10));
+        vBox.setPrefSize(400, 300);
+
+        BorderPane root = new BorderPane(vBox);
+        BorderPane.setAlignment(vBox, Pos.CENTER);
+
+        Scene scene = new Scene(root);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("Simple Chat Client");
+        primaryStage.setOnCloseRequest(event -> disconnect());
+        primaryStage.show();
+
+        // Start a new thread to listen for messages from the server
+        receiveThread = new Thread(() -> {
+            try {
+                String message;
+                while ((message = input.readLine()) != null) {
+                    if (message.startsWith("/nickname")) {
+                        setNicknameFromServer(message.substring(10));
                     } else {
-                        e.printStackTrace();
+                        String finalMessage = message;
+                        Platform.runLater(() -> chatArea.appendText(finalMessage + "\n"));
                     }
-                    this.isConnected = false;
-                    System.exit(0);
                 }
-            });
-
-            receiveThread.start();
-
-            // Read user input and send messages to the server
-            BufferedReader consoleInput = new BufferedReader(new InputStreamReader(System.in));
-            String message;
-            while ((message = consoleInput.readLine()) != null && this.isConnected == true) {
-                if (message.equalsIgnoreCase("/disconnect")) {
-                    disconnect();
-                    break;
-                } else if (message.startsWith("/nickname ")) {
-                    String newNickname = message.substring(10);
-                    if (newNickname.isEmpty()) {
-                        System.out.println("Nickname cannot be empty.");
-                    } else {
-                        setNickname(newNickname);
-                    }
+            } catch (IOException e) {
+                // Handle the SocketException here when the server is stopped
+                if (e instanceof SocketException) {
+                    Platform.runLater(() -> chatArea.appendText("Server has stopped. Disconnected from the server.\n"));
                 } else {
-                    if (nickname == null) {
-                        System.out.println("Please set a nickname first.");
-                    } else {
-                        sendMessage(message);
-                    }
+                    e.printStackTrace();
                 }
+                this.isConnected = false;
+                Platform.runLater(() -> primaryStage.close());
             }
+        });
 
-            // Close the client socket when the input loop ends
-            socket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        receiveThread.start();
+
+        // Read user input and send messages to the server
+        messageField.setOnAction(event -> sendMessage(messageField.getText().trim()));
+
+        nicknameField.setOnAction(event -> setNickname());
+
+        messageField.requestFocus();
     }
 
     private void sendMessage(String message) {
-        output.println(message);
+        if (!message.isEmpty()) {
+            if (nickname != null) {
+                output.println(message);
+                messageField.clear();
+            } else {
+                chatArea.appendText("Please set a nickname before sending messages.\n");
+            }
+        }
     }
 
-    private void setNickname(String newNickname) {
-        output.println("/nickname " + newNickname);
+
+    private void setNickname() {
+        String newNickname = nicknameField.getText().trim();
+        if (!newNickname.isEmpty()) {
+            output.println("/nickname " + newNickname);
+            nicknameField.clear();
+        }
     }
 
     private void setNicknameFromServer(String newNickname) {
         nickname = newNickname;
-        System.out.println("Nickname set to: " + nickname);
+        Platform.runLater(() -> chatArea.appendText("Nickname set to: " + nickname + "\n"));
     }
 
     private void disconnect() {
-        System.out.println("Disconnecting from the server...");
         sendMessage("/disconnect");
         this.isConnected = false;
 
@@ -123,7 +151,6 @@ public class Client {
     }
 
     public static void main(String[] args) {
-        Client client = new Client("localhost", 12345);
-        client.start();
+        launch(args);
     }
 }
